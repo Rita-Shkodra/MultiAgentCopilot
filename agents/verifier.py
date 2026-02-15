@@ -1,39 +1,45 @@
-from langchain_openai import ChatOpenAI
+import json
+import re
 
 
-def verify_output(draft, grounded_notes):
-    llm = ChatOpenAI(model="gpt-4o", temperature=0)
-
-    context = "\n\n".join(
-        [f"Citation: {n['citation']}\n{n['fact']}" for n in grounded_notes]
-    )
-
-    prompt = f"""
-You are a STRICT verification agent.
-
-Rules:
-- Every factual claim must be directly supported by grounded notes.
-- If an action, recommendation, or strategy is NOT explicitly mentioned in the notes, it is unsupported.
-- Do NOT assume implied meaning.
-- Be extremely strict.
-
-DRAFT OUTPUT:
-{draft}
-
-GROUNDED NOTES:
-{context}
-
-Respond ONLY in one of these formats:
-
-If ANY unsupported claim exists:
-FAIL
-- List each unsupported claim clearly.
-
-If EVERYTHING is explicitly supported:
-PASS
-"""
+def normalize(text):
+    return re.sub(r"\s+", " ", text.strip())
 
 
-    response = llm.invoke(prompt)
+def verify_output(draft, grounded_facts):
+    try:
+        cleaned = draft.replace("```json", "").replace("```", "").strip()
+        parsed = json.loads(cleaned)
+    except Exception:
+        return "FAIL\n- Output is not valid JSON."
 
-    return response.content
+    citation_lookup = {
+        fact["citation"]: fact["fact"]
+        for fact in grounded_facts
+    }
+    for item in parsed.get("executive_summary", []):
+        statement = normalize(item.get("statement", ""))
+        citation = item.get("citation", "")
+
+        if citation not in citation_lookup:
+            return f"FAIL\n- Citation {citation} not found."
+
+        chunk_text = normalize(citation_lookup[citation])
+
+        if statement not in chunk_text:
+            return f"FAIL\n- Statement not supported by cited chunk: {citation}"
+
+   
+    for item in parsed.get("client_email", []):
+        statement = normalize(item.get("statement", ""))
+        citation = item.get("citation", "")
+
+        if citation not in citation_lookup:
+            return f"FAIL\n- Citation {citation} not found."
+
+        chunk_text = normalize(citation_lookup[citation])
+
+        if statement not in chunk_text:
+            return f"FAIL\n- Statement not supported by cited chunk: {citation}"
+
+    return "PASS"

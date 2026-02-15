@@ -26,7 +26,8 @@ if __name__ == "__main__":
         "notes": [],
         "draft": "",
         "verification": "",
-        "vectorstore": vs
+        "vectorstore": vs,
+        "trace": []
     }
 
     result = graph.invoke(initial_state)
@@ -39,3 +40,9 @@ if __name__ == "__main__":
         print(result["draft"])
     else:
         print("\nOutput blocked due to verification failure.")
+
+    print("\n--- TRACE LOG ---\n")
+
+for step in result["trace"]:
+    print(f"{step['agent']} → {step['status']} | {step['details']}")
+
