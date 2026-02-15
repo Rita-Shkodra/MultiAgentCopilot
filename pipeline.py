@@ -6,7 +6,7 @@ from retrieval.chunking import chunk_documents
 from retrieval.vectorstore import build_vectorstore, load_vectorstore
 from agents.planner import plan_task
 from agents.researcher import research_task
-
+from agents.writer import write_deliverable
 load_dotenv()
 
 if __name__ == "__main__":
@@ -21,15 +21,11 @@ if __name__ == "__main__":
    
     task = "Analyze transportation cost increases and identify possible causes."
 
+plan = plan_task(task)
 
-    plan = plan_task(task)
+notes = research_task(vs, plan["search_query"])
 
-    
-    notes = research_task(vs, plan["search_query"])
+output = write_deliverable(task, notes)
 
-    print("\n--- GROUNDED NOTES ---\n")
-
-    for n in notes:
-        print("Citation:", n["citation"])
-        print(n["summary"])
-        print("-" * 60)
+print("\n--- FINAL DELIVERABLE ---\n")
+print(output)
