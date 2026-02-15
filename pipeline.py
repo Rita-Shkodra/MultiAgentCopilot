@@ -7,6 +7,8 @@ from retrieval.vectorstore import build_vectorstore, load_vectorstore
 from agents.planner import plan_task
 from agents.researcher import research_task
 from agents.writer import write_deliverable
+from agents.verifier import verify_output
+
 load_dotenv()
 
 if __name__ == "__main__":
@@ -27,5 +29,7 @@ notes = research_task(vs, plan["search_query"])
 
 output = write_deliverable(task, notes)
 
-print("\n--- FINAL DELIVERABLE ---\n")
-print(output)
+verification = verify_output(output, notes)
+
+print("\n--- VERIFICATION RESULT ---\n")
+print(verification)
