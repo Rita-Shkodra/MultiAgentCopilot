@@ -1,18 +1,12 @@
-def research_task(vectorstore, query, k=6):
-    """
-    Performs similarity search on the vectorstore
-    and returns grounded structured notes with citations.
-    """
-
+def research_task(vectorstore, query, k=10):
     results = vectorstore.similarity_search(query, k=k)
 
-    grounded_notes = []
+    grounded_facts = []
 
     for r in results:
-        note = {
-            "summary": r.page_content[:500], 
+        grounded_facts.append({
+            "fact": r.page_content.strip(),
             "citation": r.metadata.get("citation_id", "unknown")
-        }
-        grounded_notes.append(note)
+        })
 
-    return grounded_notes
+    return grounded_facts

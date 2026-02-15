@@ -1,31 +1,48 @@
 from langchain_openai import ChatOpenAI
+import json
 
 
-def write_deliverable(task, grounded_notes):
+def write_deliverable(task, grounded_facts):
     llm = ChatOpenAI(model="gpt-4o", temperature=0)
 
     context = "\n\n".join(
-        [f"Citation: {n['citation']}\n{n['summary']}" for n in grounded_notes]
+        [f"Citation: {f['citation']}\n{f['fact']}" for f in grounded_facts]
     )
 
     prompt = f"""
 You are an enterprise supply chain analyst.
 
-Use ONLY the grounded notes below.
-If something is not supported by the notes, write: "Not found in sources."
+STRICT RULES:
+- Use ONLY exact text from grounded facts.
+- Do NOT paraphrase.
+- Do NOT generalize.
+- Do NOT introduce new terminology.
+- If something is not explicitly present, write: "Not found in sources."
 
 TASK:
 {task}
 
-GROUNDED NOTES:
+GROUNDED FACTS:
 {context}
 
-Produce:
+Return output in STRICT JSON format:
 
-1. Executive Summary (max 150 words)
-2. Client-ready Email
-3. Action List (owner, due date, confidence)
-4. Sources (list citation IDs only)
+{{
+  "executive_summary": [
+    {{
+      "statement": "...exact text from facts...",
+      "citation": "doc#chunk"
+    }}
+  ],
+  "client_email": [
+    {{
+      "statement": "...exact text from facts...",
+      "citation": "doc#chunk"
+    }}
+  ],
+  "action_list": "Not found in sources",
+  "sources": ["doc#chunk", "doc#chunk"]
+}}
 """
 
     response = llm.invoke(prompt)

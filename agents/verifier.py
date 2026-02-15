@@ -5,7 +5,7 @@ def verify_output(draft, grounded_notes):
     llm = ChatOpenAI(model="gpt-4o", temperature=0)
 
     context = "\n\n".join(
-        [f"Citation: {n['citation']}\n{n['summary']}" for n in grounded_notes]
+        [f"Citation: {n['citation']}\n{n['fact']}" for n in grounded_notes]
     )
 
     prompt = f"""
