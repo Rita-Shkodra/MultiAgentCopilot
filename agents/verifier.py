@@ -1,56 +1,65 @@
 from langchain_openai import ChatOpenAI
+from agents.guards import GUARDRAILS
 
 
 def verify_output(draft, grounded_notes):
 
     llm = ChatOpenAI(
-        model="gpt-4o-mini",   # lightweight but reliable
+        model="gpt-4o-mini",
         temperature=0
     )
 
     evidence_text = "\n\n".join(
-        [f"Citation: {n['citation']}\n{n['fact']}" for n in grounded_notes]
+        [f"{n['citation']}\n{n['fact']}" for n in grounded_notes]
     )
 
     prompt = f"""
-You are a senior audit and compliance verifier.
+{GUARDRAILS}
 
-Your job is to ensure that the draft output is reasonably grounded in the provided evidence.
+You are a compliance verifier.
 
-IMPORTANT:
+Audit the draft against the evidence.
 
-- The draft may synthesize across multiple sources.
-- The draft may logically connect documented risks to cost exposure.
-- Executive-level interpretation is allowed.
-- Reasonable inference is allowed.
+FAIL only if:
+1. A new entity, driver, or event appears.
+2. A number is introduced that is not in evidence.
+3. A statement contradicts evidence.
+4. A mitigation mechanism is invented.
 
-You must ONLY fail the output if:
-1. It introduces completely new factors not present in evidence.
-2. It invents specific numbers not in evidence.
-3. It makes strong causal claims not reasonably implied.
-4. It contradicts the evidence.
-
-DO NOT fail for:
-- Strategic interpretation
+Do NOT fail for:
+- Rephrasing
 - Logical synthesis
-- Business framing
-- Risk-based language ("may", "could", "suggests")
+- Executive summarization
+- Risk language ("may", "can", "could")
 
-Grounded Evidence:
+EVIDENCE:
 {evidence_text}
 
-Draft Output:
+DRAFT:
 {draft}
 
-Respond in ONE of the following formats:
+Respond EXACTLY:
 
 PASS
 
 OR
 
 FAIL
-List clearly unsupported claims.
+Unsupported claims:
+- <claim>
 """
 
     response = llm.invoke(prompt)
-    return response.content.strip()
+
+    usage = getattr(response, "usage_metadata", {}) or {}
+
+    tokens = {
+        "input_tokens": usage.get("input_tokens", 0),
+        "output_tokens": usage.get("output_tokens", 0),
+        "total_tokens": usage.get("total_tokens", 0),
+    }
+
+    return {
+        "content": response.content.strip(),
+        "tokens": tokens
+    }

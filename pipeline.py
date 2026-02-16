@@ -10,7 +10,7 @@ from orchestrator import graph
 load_dotenv()
 
 
-def run_copilot(task, mode = "executive"):
+def run_copilot(task):
 
     if not Path("chroma_db").exists():
         docs = load_documents()
@@ -21,14 +21,17 @@ def run_copilot(task, mode = "executive"):
 
     initial_state = {
     "task": task,
-    "mode": mode,
     "plan": {},
     "notes": [],
     "draft": "",
     "verification": "",
     "vectorstore": vs,
-    "trace": []
+    "trace": [],
+    "metrics": {
+        "errors": 0
+    }
 }
+
 
 
     result = graph.invoke(initial_state)

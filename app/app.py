@@ -1,6 +1,5 @@
 import sys
 import os
-import json
 import time
 import streamlit as st
 
@@ -9,6 +8,7 @@ sys.path.append(
 )
 
 from pipeline import run_copilot
+
 
 st.set_page_config(
     page_title="SupplyChain Copilot",
@@ -20,7 +20,7 @@ st.caption("Multi-Agent Evidence-Grounded Enterprise Assistant")
 
 st.markdown("---")
 
-# -------- INPUT AREA --------
+
 
 task = st.text_area(
     "Business Task",
@@ -35,14 +35,14 @@ with col1:
 
 st.markdown("---")
 
-# -------- STATE --------
+
 
 if "result" not in st.session_state:
     st.session_state.result = None
     st.session_state.latency = None
 
-if run_button:
 
+if run_button:
     if not task.strip():
         st.warning("Please enter a task.")
     else:
@@ -56,52 +56,151 @@ if run_button:
         st.session_state.result = result
         st.session_state.latency = latency
 
-# -------- OUTPUT --------
+
 
 if st.session_state.result:
 
     result = st.session_state.result
+    draft_text = result.get("draft", "")
 
-    # Verification
-    if result["verification"].startswith("PASS"):
+    verification = result.get("verification", "")
 
-        cleaned = result["draft"].replace("```json", "").replace("```", "").strip()
-    parsed = json.loads(cleaned)
+    if verification.startswith("PASS"):
+        st.success("Verification: PASS")
+    else:
+        st.error("Verification Failed – Unsupported Claims Detected")
+        st.warning(verification)
+        st.stop() 
 
-    # -------- Copilot Insight --------
-    st.markdown("## 🧠 Copilot Insight")
 
-    insight_text = " ".join(
-        [item["statement"] for item in parsed.get("executive_summary", [])[:2]]
-    )
+    st.markdown("---")
 
-    st.info(insight_text)
+    st.markdown("## Executive Summary")
 
-    # -------- Key Drivers --------
-    st.markdown("## 🔎 Key Risk Drivers")
+    if "executive summary" in draft_text.lower():
+        start = draft_text.lower().index("executive summary")
+        section = draft_text[start:]
 
-    for item in parsed.get("executive_summary", []):
-        st.markdown(f"- {item['statement']}")
+        if "client email" in section.lower():
+            end = section.lower().index("client email")
+            section = section[:end]
 
-    # -------- Communication Draft --------
-    st.markdown("## ✉ Suggested Client Communication")
+        if ":" in section:
+            section = section.split(":", 1)[1]
 
-    email_preview = "\n\n".join(
-        [item["statement"] for item in parsed.get("client_email", [])]
-    )
+        st.write(section.strip())
+    else:
+        st.write("Not available.")
 
-    st.text_area(
-        "Draft Email",
-        value=email_preview,
-        height=200
-    )
+    st.markdown("## Client Email")
 
-    # -------- Evidence --------
-    with st.expander("📚 View Supporting Evidence"):
-        for s in parsed.get("sources", []):
-            st.write(s)
+    if "client email" in draft_text.lower():
+        start = draft_text.lower().index("client email")
+        section = draft_text[start:]
 
-    # -------- Trace --------
-    with st.expander("⚙ Agent Execution Trace"):
-        for step in result["trace"]:
-            st.write(f"{step['agent']} → {step['status']} | {step['details']}")
+        if "action list" in section.lower():
+            end = section.lower().index("action list")
+            section = section[:end]
+
+        if ":" in section:
+            section = section.split(":", 1)[1]
+
+        st.write(section.strip())
+    else:
+        st.write("Not available.")
+
+    st.markdown("## Action List")
+
+    if "action list" in draft_text.lower():
+        start = draft_text.lower().index("action list")
+        section = draft_text[start:]
+
+        if "sources" in section.lower():
+            end = section.lower().index("sources")
+            section = section[:end]
+
+        if ":" in section:
+            section = section.split(":", 1)[1]
+
+        clean_action = section.strip()
+
+        if not clean_action:
+            st.write("No documented action identified in retrieved evidence.")
+        else:
+            st.write(clean_action)
+    else:
+        st.write("No documented action identified in retrieved evidence.")
+
+       
+    st.markdown("## Sources")
+
+    if "sources" in draft_text.lower():
+        start = draft_text.lower().index("sources")
+        section = draft_text[start:]
+
+        if ":" in section:
+            section = section.split(":", 1)[1]
+
+        sources = [line.strip() for line in section.splitlines() if line.strip()]
+
+        if not sources:
+            st.write("No sources found.")
+        else:
+            for src in sources:
+                st.markdown(
+                    f"""
+<div style="
+    padding:10px 14px;
+    border-radius:8px;
+    background-color:#1f2937;  /* darker */
+    border:1px solid #111827;
+    margin-bottom:8px;
+    font-family:monospace;
+    font-size:13px;
+    color:#e5e7eb;
+">
+{src}
+</div>
+""",
+                    unsafe_allow_html=True
+                )
+    else:
+        st.write("No sources found.")
+
+    with st.expander("Agent Execution Trace"):
+        for step in result.get("trace", []):
+            st.write(
+                f"{step.get('agent')} → {step.get('status')} | {step.get('details')} | {step.get('latency_ms', 0)} ms"
+            )
+
+    st.markdown("## Observability")
+
+    trace = result.get("trace", [])
+
+    if trace:
+        rows = []
+        total_latency = 0
+        total_tokens = 0
+
+        for t in trace:
+            latency = t.get("latency_ms", 0)
+            tokens = t.get("total_tokens", 0)
+
+            total_latency += latency
+            total_tokens += tokens
+
+            rows.append({
+                "Agent": t.get("agent"),
+                "Status": t.get("status"),
+                "Latency (ms)": latency,
+                "Total Tokens": tokens
+            })
+
+        st.table(rows)
+
+        st.markdown("---")
+        st.caption(f"Total Agent Time: {round(total_latency, 2)} ms")
+        st.caption(f"Total Tokens Used: {total_tokens}")
+        st.caption(f"Errors: {result.get('metrics', {}).get('errors', 0)}")
+    else:
+        st.write("No observability data available.")

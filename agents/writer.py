@@ -1,80 +1,123 @@
 from langchain_openai import ChatOpenAI
+from agents.guards import GUARDRAILS
 
 
 def write_output(task, plan, grounded_notes):
 
     llm = ChatOpenAI(
-        model="gpt-4o",   # full model for synthesis
+        model="gpt-4o-mini", 
         temperature=0
     )
 
-    # Build evidence context
+    
     evidence_text = "\n\n".join(
-        [f"Source: {n['citation']}\n{n['fact']}" for n in grounded_notes]
+        [f"{n['citation']}\n{n['fact']}" for n in grounded_notes]
     )
 
     prompt = f"""
-You are an Enterprise Supply Chain Copilot operating in a risk and compliance context.
+{GUARDRAILS}
 
-Your task is to produce a decision-ready executive deliverable grounded strictly in disclosed evidence.
+You are an Enterprise Supply Chain Copilot producing a structured executive deliverable.
 
-MANDATORY RULES:
+Your output MUST strictly follow the required structure.
 
-1. Do NOT state that transportation costs are increasing unless explicitly stated in evidence.
-2. Do NOT generalize industry-wide conclusions.
-3. Do NOT forecast future outcomes.
-4. Do NOT invent strategic recommendations.
-5. Do NOT infer causality unless clearly documented.
-6. Use exposure-based phrasing:
-   - "disclosures indicate"
-   - "reports document"
-   - "evidence highlights"
-   - "operations are sensitive to"
-   - "results may be affected by"
-7. Keep Executive Summary under 150 words.
-8. Maintain concise, board-ready, analytical tone.
+------------------------------------------------------------
+TOPIC RELEVANCE RULE
+------------------------------------------------------------
 
-ACTIONS:
-- Only include actions if they are directly tied to documented mechanisms (e.g., fuel surcharge recovery, labor cost exposure).
-- If actions cannot be defensibly derived, write:
-  "Not found in sources"
+If the BUSINESS TASK contains a specific topic, entity, or risk
+that does NOT appear anywhere in the EVIDENCE block:
 
-Business Task:
+• Explicitly state that no direct evidence was found.
+• Do NOT pivot to adjacent risks.
+• Do NOT generalize the task.
+• Do NOT speculate.
+
+------------------------------------------------------------
+EVIDENCE RULES
+------------------------------------------------------------
+
+• Only reference entities, drivers, mechanisms, and numbers explicitly present in evidence.
+• Do NOT introduce new trends, events, or macro context.
+• Do NOT invent strategies.
+• Do NOT infer causality unless directly documented.
+• Keep wording strength equal to source wording.
+
+------------------------------------------------------------
+ACTION DERIVATION RULE
+------------------------------------------------------------
+
+You MAY convert documented exposures, pricing mechanisms, cost drivers,
+or contractual structures into monitoring or review actions.
+
+If NO documented management lever exists, write EXACTLY:
+
+No documented action identified in retrieved evidence. Missing info needed: <required evidence>
+
+------------------------------------------------------------
+STYLE
+------------------------------------------------------------
+
+• Executive Summary ≤ 150 words.
+• Neutral, analytical tone.
+• No exaggeration.
+• No repetition.
+
+------------------------------------------------------------
+BUSINESS TASK
+------------------------------------------------------------
+
 {task}
 
-Grounded Evidence:
+------------------------------------------------------------
+EVIDENCE
+------------------------------------------------------------
+
 {evidence_text}
 
-Return output EXACTLY in this structure:
+------------------------------------------------------------
+REQUIRED OUTPUT STRUCTURE (STRICT)
+------------------------------------------------------------
 
 EXECUTIVE SUMMARY:
-(max 150 words)
+<text>
 
 CLIENT EMAIL:
-Subject:
-Greeting:
-Body:
-Closing:
+Subject: <text>
+Greeting: <text>
+Body: <text>
+Closing: <text>
 
 ACTION LIST:
-- Action:
-  Owner:
-  Due date:
-  Confidence:
+
+If actions exist, use EXACTLY this format.
+Each field MUST appear on its own line.
+Insert ONE blank line between actions.
+
+Action: <text>
+Owner: <text>
+Due date: <text>
+Confidence: <High / Medium / Low>
 
 SOURCES:
-(list unique citations in format DocumentName#chunk-id)
+<one citation per line>
+Format: DocumentName#chunk-id
 
-Do not add extra sections.
-Do not add commentary.
-Do not repeat evidence verbatim.
-Synthesize cautiously.
-If the draft contains unsupported claims, reduce scope instead of expanding narrative.
-
+Do NOT add extra sections.
+Do NOT add commentary.
 """
-
-
 
     response = llm.invoke(prompt)
 
-    return response.content
+    usage = getattr(response, "usage_metadata", {}) or {}
+
+    tokens = {
+        "input_tokens": usage.get("input_tokens", 0),
+        "output_tokens": usage.get("output_tokens", 0),
+        "total_tokens": usage.get("total_tokens", 0),
+    }
+
+    return {
+        "content": response.content.strip(),
+        "tokens": tokens
+    }
