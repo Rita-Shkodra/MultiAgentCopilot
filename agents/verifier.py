@@ -1,45 +1,56 @@
-import json
-import re
+from langchain_openai import ChatOpenAI
 
 
-def normalize(text):
-    return re.sub(r"\s+", " ", text.strip())
+def verify_output(draft, grounded_notes):
 
+    llm = ChatOpenAI(
+        model="gpt-4o-mini",   # lightweight but reliable
+        temperature=0
+    )
 
-def verify_output(draft, grounded_facts):
-    try:
-        cleaned = draft.replace("```json", "").replace("```", "").strip()
-        parsed = json.loads(cleaned)
-    except Exception:
-        return "FAIL\n- Output is not valid JSON."
+    evidence_text = "\n\n".join(
+        [f"Citation: {n['citation']}\n{n['fact']}" for n in grounded_notes]
+    )
 
-    citation_lookup = {
-        fact["citation"]: fact["fact"]
-        for fact in grounded_facts
-    }
-    for item in parsed.get("executive_summary", []):
-        statement = normalize(item.get("statement", ""))
-        citation = item.get("citation", "")
+    prompt = f"""
+You are a senior audit and compliance verifier.
 
-        if citation not in citation_lookup:
-            return f"FAIL\n- Citation {citation} not found."
+Your job is to ensure that the draft output is reasonably grounded in the provided evidence.
 
-        chunk_text = normalize(citation_lookup[citation])
+IMPORTANT:
 
-        if statement not in chunk_text:
-            return f"FAIL\n- Statement not supported by cited chunk: {citation}"
+- The draft may synthesize across multiple sources.
+- The draft may logically connect documented risks to cost exposure.
+- Executive-level interpretation is allowed.
+- Reasonable inference is allowed.
 
-   
-    for item in parsed.get("client_email", []):
-        statement = normalize(item.get("statement", ""))
-        citation = item.get("citation", "")
+You must ONLY fail the output if:
+1. It introduces completely new factors not present in evidence.
+2. It invents specific numbers not in evidence.
+3. It makes strong causal claims not reasonably implied.
+4. It contradicts the evidence.
 
-        if citation not in citation_lookup:
-            return f"FAIL\n- Citation {citation} not found."
+DO NOT fail for:
+- Strategic interpretation
+- Logical synthesis
+- Business framing
+- Risk-based language ("may", "could", "suggests")
 
-        chunk_text = normalize(citation_lookup[citation])
+Grounded Evidence:
+{evidence_text}
 
-        if statement not in chunk_text:
-            return f"FAIL\n- Statement not supported by cited chunk: {citation}"
+Draft Output:
+{draft}
 
-    return "PASS"
+Respond in ONE of the following formats:
+
+PASS
+
+OR
+
+FAIL
+List clearly unsupported claims.
+"""
+
+    response = llm.invoke(prompt)
+    return response.content.strip()

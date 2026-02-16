@@ -1,9 +1,9 @@
-from langgraph.graph import StateGraph
 from typing import TypedDict, List, Dict
+from langgraph.graph import StateGraph
 
 from agents.planner import plan_task
 from agents.researcher import research_task
-from agents.writer import write_deliverable
+from agents.writer import write_output
 from agents.verifier import verify_output
 
 
@@ -19,35 +19,45 @@ class AgentState(TypedDict):
 
 def planner_node(state: AgentState):
     state["plan"] = plan_task(state["task"])
+
     state["trace"].append({
         "agent": "Planner",
         "status": "Completed",
-        "details": "Task decomposed"
+        "details": f"Generated {len(state['plan'].get('sub_questions', []))} sub-questions"
     })
+    
+
     return state
 
 
+
 def researcher_node(state: AgentState):
-    vectorstore = state["vectorstore"]
-    state["notes"] = research_task(vectorstore, state["plan"]["search_query"])
+    vs = state["vectorstore"]
+
+    state["notes"] = research_task(vs, state["plan"])
 
     state["trace"].append({
         "agent": "Researcher",
         "status": "Completed",
-        "details": f"Retrieved {len(state['notes'])} grounded facts"
+        "details": f"Aggregated {len(state['notes'])} evidence chunks"
     })
-
+   
     return state
 
 
 
 def writer_node(state: AgentState):
-    state["draft"] = write_deliverable(state["task"], state["notes"])
+
+    state["draft"] = write_output(
+        state["task"],
+        state["plan"],
+        state["notes"]
+    )
 
     state["trace"].append({
         "agent": "Writer",
         "status": "Completed",
-        "details": "Structured JSON draft created"
+        "details": "Synthesized executive deliverable"
     })
 
     return state
@@ -56,31 +66,30 @@ def writer_node(state: AgentState):
 
 def verifier_node(state: AgentState):
     state["verification"] = verify_output(state["draft"], state["notes"])
-
     state["trace"].append({
         "agent": "Verifier",
         "status": "PASS" if state["verification"].startswith("PASS") else "FAIL",
         "details": "Verification completed"
     })
-
+    
     return state
 
 
 
-def build_graph():
-    graph = StateGraph(AgentState)
 
-    graph.add_node("planner", planner_node)
-    graph.add_node("researcher", researcher_node)
-    graph.add_node("writer", writer_node)
-    graph.add_node("verifier", verifier_node)
+workflow = StateGraph(AgentState)
 
-    graph.set_entry_point("planner")
+workflow.add_node("planner", planner_node)
+workflow.add_node("researcher", researcher_node)
+workflow.add_node("writer", writer_node)
+workflow.add_node("verifier", verifier_node)
 
-    graph.add_edge("planner", "researcher")
-    graph.add_edge("researcher", "writer")
-    graph.add_edge("writer", "verifier")
+workflow.set_entry_point("planner")
 
-    graph.set_finish_point("verifier")
+workflow.add_edge("planner", "researcher")
+workflow.add_edge("researcher", "writer")
+workflow.add_edge("writer", "verifier")
 
-    return graph.compile()
+workflow.set_finish_point("verifier")
+
+graph = workflow.compile()
