@@ -22,16 +22,21 @@ st.markdown("---")
 
 
 
-task = st.text_area(
-    "Business Task",
-    placeholder="Analyze transportation cost increases and identify possible causes.",
-    height=140
-)
+st.markdown("### Business Task")
 
-col1, col2 = st.columns([1, 4])
+with st.form("task_form", clear_on_submit=False):
 
-with col1:
-    run_button = st.button("Run")
+    task = st.text_area(
+        "",
+        placeholder="Example: Evaluate fuel price exposure risk in air transportation.",
+        height=120
+    )
+
+    col1, col2 = st.columns([4, 1])
+
+    with col2:
+        run_button = st.form_submit_button("Run Analysis")
+
 
 st.markdown("---")
 
