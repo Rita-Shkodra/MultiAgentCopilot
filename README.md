@@ -2,7 +2,6 @@
 
 An evidence-grounded, multi-agent enterprise assistant that analyzes supply chain and transportation risks using retrieved corporate documents only.
 
-The system performs structured planning, document retrieval, executive synthesis, and compliance verification — with full observability and prompt-injection defense.
 
 ---
 ## Live Demo
